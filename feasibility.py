@@ -7,7 +7,7 @@ from threading import Thread
 import socket
 import tkinter
 from keyboard import add_hotkey
-import win32clipboard
+import win32clipboard  # works on win only
 from PIL import ImageGrab
 from tkinter import *
 from tkinter.ttk import *
@@ -20,7 +20,7 @@ def getScreenShot():
     im = ImageGrab.grab()
     imgByteArray = BytesIO()
     im.save(imgByteArray, "PNG")
-    imgBytes = imgByteArray.getvalue() # bytes
+    imgBytes = imgByteArray.getvalue()  # bytes
     im.save("./foo.png")
     pass
 
@@ -69,9 +69,9 @@ def writeIdToFile():
 
 def guiFeasibility():
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    #获取屏幕的缩放因子
-    ScaleFactor=ctypes.windll.shcore.GetScaleFactorForDevice(0)
-    #设置程序缩放
+    # 获取屏幕的缩放因子
+    ScaleFactor = ctypes.windll.shcore.GetScaleFactorForDevice(0)
+    # 设置程序缩放
     window = Tk()
     window.tk.call('tk', 'scaling', ScaleFactor/75)
     window.title("Helper")

@@ -1,0 +1,9 @@
+.vscode/
+
+foo.*
+bar.*
+
+*.out
+*.obj
+
+tmp*.*
