@@ -2,7 +2,6 @@ from datetime import datetime
 import ctypes
 from io import BytesIO
 from socket import ntohl, socket, AF_INET, SOCK_STREAM
-from sys import path_hooks
 from threading import Condition, Thread, Lock
 from queue import Queue
 from PIL import ImageGrab
@@ -29,6 +28,7 @@ queueMutex = Lock()
 queueCond = Condition(queueMutex)
 
 clipboardMutex = Lock()
+
 
 def logout(info):
     now = datetime.now()
@@ -57,7 +57,6 @@ def getScreenShot():
 def getFromClipboard():
     clipboardMutex.acquire()
     win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
     txt = win32clipboard.GetClipboardData()
     win32clipboard.CloseClipboard()
     clipboardMutex.release()
@@ -75,7 +74,7 @@ def onHotkeyPress(key):
     elif key == HOT_KEY_GET_SCR_SHOT:
         scrShotData = getScreenShot()
         queueMutex.acquire()
-        codeQueue.put(scrShotData)
+        scrShotQueue.put(scrShotData)
         queueCond.notify()
         queueMutex.release()
     pass
@@ -89,7 +88,7 @@ def sendData(sock: socket, reqCode, length=2, data=b'ok'):
 def connect():
     sock = socket(AF_INET, SOCK_STREAM)
     sock.connect((host, port))
-    sendData(sock, CODE_REG_HELPER)
+    sendData(sock, CODE_REG_WORKER)
     return sock
 
 
@@ -98,8 +97,8 @@ def readerJob4Worker(sock: socket):
     while not stop:
         try:
             headers = sock.recv(12)
-            reqCode = int.from_bytes(headers[0:4], byteorder="little")
-            bodyLen = int.from_bytes(headers[4:8], byteorder="little")
+            reqCode = ntohl(int.from_bytes(headers[0:4], byteorder=byteorder))
+            bodyLen = ntohl(int.from_bytes(headers[4:8], byteorder=byteorder))
             if reqCode == 0:
                 print("响应码为0，连接已断开")
                 return
@@ -123,7 +122,8 @@ def writerJob4Worker(sock: socket):
     """ 读取队列数据发送到服务端 """
     while not stop:
         queueMutex.acquire()
-        queueCond.wait()
+        queueCond.wait_for(lambda: (not codeQueue.empty())
+                           or (not scrShotQueue.empty()) or (stop))
         if stop:
             return
         while not codeQueue.empty():
@@ -146,19 +146,17 @@ def exitAndNotify():
 def work():
     try:
         sock = connect()
-        sendData(sock, CODE_REG_WORKER)
         add_hotkey(hotkey=HOT_KEY_GET_SCR_SHOT,
                    callback=onHotkeyPress, args=(HOT_KEY_GET_SCR_SHOT, ))
         add_hotkey(hotkey=HOT_KEY_GET_CLIP_DATA,
                    callback=onHotkeyPress, args=(HOT_KEY_GET_CLIP_DATA, ))
-        Thread(target=writerJob4Worker, args=(sock, ))
+        Thread(target=writerJob4Worker, args=(sock, )).start()
         readerJob4Worker(sock)
     except Exception as e:
         print("Error: %s" % (e))
     else:
         sock.close()
         exitAndNotify()
-
 
 
 if __name__ == "__main__":
