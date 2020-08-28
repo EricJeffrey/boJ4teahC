@@ -25,6 +25,13 @@ def getScreenShot():
     pass
 
 
+def getFromClipboard():
+    win32clipboard.OpenClipboard()
+    txt = win32clipboard.GetClipboardData()
+    win32clipboard.CloseClipboard()
+    return txt
+
+
 def copy2clipboard(data: str):
     """ 将data中的数据拷贝到剪贴板上 """
     win32clipboard.OpenClipboard()
@@ -96,5 +103,8 @@ if __name__ == "__main__":
     # copy2clipboard(s)
     # while True:
     #     pass
-    guiFeasibility()
+    # guiFeasibility()
+    while True:
+        print(getFromClipboard())
+        input("go on?")
     pass

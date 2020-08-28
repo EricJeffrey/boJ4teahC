@@ -23,6 +23,7 @@ public:
     static mutex codeQMutex;
     static mutex scrShotQeMutex;
 
+    // FIXME one cond is enough
     static condition_variable codeQCondVar;
     static condition_variable scrShotQCondVar;
 

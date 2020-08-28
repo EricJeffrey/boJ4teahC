@@ -7,7 +7,7 @@
 
 void writerJob() {}
 
-void work() {
+int work() {
     try {
         const int port = 8000;
         int listenSd = createServerSocket(port, "0.0.0.0");
@@ -38,12 +38,18 @@ void work() {
         }
     } catch (const std::exception &e) {
         loggerInstance()->error("server start failed");
+        return -1;
     }
+    return 0;
 }
 
 int main(int argc, char const *argv[]) {
+    // if (daemon(1, 0) == 1) {
+    //     perror("daemon failed:");
+    //     return -1;
+    // }
     Logger::init(std::cerr);
     loggerInstance()->setDebug(true);
-    work();
-    return 0;
+    int ret = work();
+    return ret;
 }

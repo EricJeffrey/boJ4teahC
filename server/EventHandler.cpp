@@ -29,7 +29,6 @@ void EventHandler::writerJob() {
                 vector<char> data = codeQueue.front();
                 codeQueue.pop();
                 vector<char> respData = Response::wrapRespData(ReqCode::CODE_DATA, data);
-                loggerInstance()->debug({"code data fetched:", vecChar2Str(respData)});
                 for (auto &&clientSd : clientSockets) {
                     int ret = write(clientSd, respData.data(), respData.size());
                     if (ret == -1) {
