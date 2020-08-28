@@ -13,19 +13,15 @@ using std::queue;
 
 class EventHandler {
 public:
-    static vector<int> workerSockets;
-    static vector<int> helperSockets;
+    static set<int> workerSockets;
+    static set<int> helperSockets;
     static set<int> clientSockets;
 
     static queue<vector<char>> codeQueue;
     static queue<vector<char>> screenShotQueue;
 
-    static mutex codeQMutex;
-    static mutex scrShotQeMutex;
-
-    // FIXME one cond is enough
-    static condition_variable codeQCondVar;
-    static condition_variable scrShotQCondVar;
+    static mutex codeScrQMutex;
+    static condition_variable codeScrQCondVar;
 
     static void handleAcceptEv(int listenSd, PtrPoller poller);
     static void handleReadEv(int sd, PtrPoller poller);

@@ -27,8 +27,6 @@ scrShotQueue = Queue()
 queueMutex = Lock()
 queueCond = Condition(queueMutex)
 
-clipboardMutex = Lock()
-
 
 def logout(info):
     now = datetime.now()
@@ -37,12 +35,10 @@ def logout(info):
 
 def copy2clipboard(data: str):
     """ 将data中的数据拷贝到剪贴板上 """
-    clipboardMutex.acquire()
     win32clipboard.OpenClipboard()
     win32clipboard.EmptyClipboard()
     win32clipboard.SetClipboardText(data)
     win32clipboard.CloseClipboard()
-    clipboardMutex.release()
     pass
 
 
@@ -55,11 +51,13 @@ def getScreenShot():
 
 
 def getFromClipboard():
-    clipboardMutex.acquire()
-    win32clipboard.OpenClipboard()
-    txt = win32clipboard.GetClipboardData()
-    win32clipboard.CloseClipboard()
-    clipboardMutex.release()
+    txt = ""
+    try:
+        win32clipboard.OpenClipboard()
+        txt = win32clipboard.GetClipboardData()
+        win32clipboard.CloseClipboard()
+    except Exception as e:
+        print("get clipboard data error: %s" % (e))
     return txt
 
 
@@ -67,16 +65,21 @@ def onHotkeyPress(key):
     print("onHotKeyPress, key: %s" % (key))
     if key == HOT_KEY_GET_CLIP_DATA:
         codeData = getFromClipboard().encode(encoding="utf-8")
-        queueMutex.acquire()
-        codeQueue.put(codeData)
-        queueCond.notify()
-        queueMutex.release()
+        if len(codeData) == 0:
+            print("clipboard has no data")
+        else:
+            queueMutex.acquire()
+            codeQueue.put(codeData)
+            queueCond.notify()
+            queueMutex.release()
+            print("clipboard text put to queue")
     elif key == HOT_KEY_GET_SCR_SHOT:
         scrShotData = getScreenShot()
         queueMutex.acquire()
         scrShotQueue.put(scrShotData)
         queueCond.notify()
         queueMutex.release()
+        print("screenshot put to queue")
     pass
 
 
@@ -105,7 +108,6 @@ def readerJob4Worker(sock: socket):
             print("header got, code: %d, len: %d" % (reqCode, bodyLen))
             # addi = int.from_bytes(headers[8:12], byteorder=byteorder)
             body = sock.recv(bodyLen)
-            print("body got")
             if reqCode == CODE_CODE_DATA:
                 bodyStr = str(body, encoding="utf-8")
                 copy2clipboard(bodyStr)
@@ -131,6 +133,7 @@ def writerJob4Worker(sock: socket):
             sendData(sock, CODE_CODE_DATA, len(codeData), codeData)
         while not scrShotQueue.empty():
             scrShotData = scrShotQueue.get()
+            print("screen shot size: %d" % (len(scrShotData)))
             sendData(sock, CODE_SCRSHOT_DATA, len(scrShotData), scrShotData)
         queueMutex.release()
 

@@ -14,7 +14,7 @@ int work() {
         PtrPoller pollerPtr = std::make_shared<Poller>(listenSd);
         thread(EventHandler::writerJob).detach();
 
-        loggerInstance()->debug({"server started on port: ", to_string(port)});
+        loggerInstance()->info({"Server started on port:", to_string(port)});
         while (true) {
             EpollEvs2IntRet tmpWaitRet = pollerPtr->epollWait();
             if (tmpWaitRet.second == -1) {
@@ -37,8 +37,8 @@ int work() {
             }
         }
     } catch (const std::exception &e) {
-        loggerInstance()->error("server start failed");
-        return -1;
+        loggerInstance()->error({"server start failed:", e.what()});
+        exit(-1);
     }
     return 0;
 }
@@ -49,7 +49,7 @@ int main(int argc, char const *argv[]) {
     //     return -1;
     // }
     Logger::init(std::cerr);
-    loggerInstance()->setDebug(true);
-    int ret = work();
-    return ret;
+    loggerInstance()->setDebug(false);
+    work();
+    return 0;
 }

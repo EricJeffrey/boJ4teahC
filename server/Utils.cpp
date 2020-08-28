@@ -3,6 +3,7 @@
 
 #include "Utils.h"
 #include <sstream>
+#include <unistd.h>
 
 using std::runtime_error;
 
@@ -59,6 +60,49 @@ string vecChar2Str(const vector<char> &data) {
     for (auto &&c : data)
         ss << c;
     return ss.str();
+}
+
+int writen(int sd, const char *buf, ssize_t numToWrite) {
+    ssize_t byteNumWrite = 0, ret;
+    while (byteNumWrite < numToWrite) {
+        ret = write(sd, buf + byteNumWrite, numToWrite - byteNumWrite);
+        const int tmpErrno = errno;
+        if (ret == -1) {
+            loggerInstance()->sysError(tmpErrno, "write failed");
+            if (tmpErrno == EBADFD)
+                throw runtime_error("call to write failed, EBADFD");
+            throw runtime_error("call to write failed");
+        } else {
+            if (tmpErrno == EINTR)
+                loggerInstance()->info({"write interrputed by signal"});
+            byteNumWrite += ret;
+        }
+    }
+    return 0;
+}
+int readn(int sd, char *buf, ssize_t numToRead) {
+    ssize_t byteNumRead = 0, ret;
+    while (byteNumRead < numToRead) {
+        ret = read(sd, buf + byteNumRead, numToRead - byteNumRead);
+        const int tmpErrno = errno;
+        if (ret == -1) {
+            loggerInstance()->sysError(tmpErrno, "read failed");
+            if (tmpErrno == EBADFD)
+                throw runtime_error("call to read failed, EBADFD");
+            throw runtime_error("call to read failed");
+        } else if (ret > 0) {
+            if (tmpErrno == EINTR)
+                loggerInstance()->debug({"read interrupted by signal"});
+            byteNumRead += ret;
+        }
+    }
+    return 0;
+}
+
+string parseAddr(sockaddr_in addr) {
+    char buf[15] = {};
+    inet_ntop(AF_INET, &addr.sin_addr, buf, 15);
+    return string(buf);
 }
 
 #endif // UTILS_CPP

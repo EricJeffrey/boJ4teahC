@@ -21,4 +21,9 @@ SockAddr2Int acceptConn(int listenSd);
 
 string vecChar2Str(const vector<char> &);
 
+int writen(int sd, const char *buf, ssize_t numToWrite);
+int readn(int sd, char *buf, ssize_t numToRead);
+
+string parseAddr(sockaddr_in addr);
+
 #endif // UTILS_H

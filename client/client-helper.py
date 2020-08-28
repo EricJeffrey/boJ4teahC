@@ -61,8 +61,13 @@ def readerJob(sock: socket):
             bodyLen = int.from_bytes(headers[4:8], byteorder="little")
             print("header got, code: %d, len: %d" % (reqCode, bodyLen))
             # addi = int.from_bytes(headers[8:12], byteorder=byteorder)
-            body = sock.recv(bodyLen)
-            print("body got")
+            if reqCode == 0:
+                print("invalid reqCode 0, close & exit")
+                sock.close()
+                exit(-1)
+            body = bytes()
+            while len(body) < bodyLen:
+                body += sock.recv(bodyLen - len(body))
             if reqCode == CODE_CODE_DATA:
                 bodyStr = str(body, encoding="utf-8")
                 copy2clipboard(bodyStr)

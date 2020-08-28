@@ -5,43 +5,33 @@
 #include "Response.h"
 #include "EventHandler.h"
 
-vector<int> EventHandler::workerSockets;
-vector<int> EventHandler::helperSockets;
+set<int> EventHandler::workerSockets;
+set<int> EventHandler::helperSockets;
 set<int> EventHandler::clientSockets;
 
 queue<vector<char>> EventHandler::codeQueue;
 queue<vector<char>> EventHandler::screenShotQueue;
 
-mutex EventHandler::codeQMutex;
-mutex EventHandler::scrShotQeMutex;
+mutex EventHandler::codeScrQMutex;
 
-condition_variable EventHandler::codeQCondVar;
-condition_variable EventHandler::scrShotQCondVar;
+condition_variable EventHandler::codeScrQCondVar;
 
 void EventHandler::writerJob() {
-    loggerInstance()->info("writer job started");
+    loggerInstance()->info("Writer thread started");
     while (true) {
-        const auto waitTime = std::chrono::milliseconds(10);
-        {
-            std::unique_lock<mutex> lock(codeQMutex);
-            codeQCondVar.wait_for(lock, waitTime, [] { return !codeQueue.empty(); });
+        try {
+            std::unique_lock<mutex> lock(codeScrQMutex);
+            codeScrQCondVar.wait(lock,
+                                 [] { return !codeQueue.empty() || !screenShotQueue.empty(); });
             while (!codeQueue.empty()) {
                 vector<char> data = codeQueue.front();
                 codeQueue.pop();
                 vector<char> respData = Response::wrapRespData(ReqCode::CODE_DATA, data);
                 for (auto &&clientSd : clientSockets) {
-                    int ret = write(clientSd, respData.data(), respData.size());
-                    if (ret == -1) {
-                        loggerInstance()->sysError(errno, "write failed");
-                        throw runtime_error("call to write failed");
-                    }
+                    writen(clientSd, respData.data(), respData.size());
                 }
-                loggerInstance()->debug({"code data send to client"});
+                loggerInstance()->info({"CodeData ------------> All Clients"});
             }
-        }
-        {
-            std::unique_lock<mutex> lock(scrShotQeMutex);
-            scrShotQCondVar.wait_for(lock, waitTime, [] { return !screenShotQueue.empty(); });
             while (!screenShotQueue.empty()) {
                 vector<char> data = screenShotQueue.front();
                 screenShotQueue.pop();
@@ -49,14 +39,12 @@ void EventHandler::writerJob() {
                 for (auto &&clientSd : helperSockets) {
                     // write
                     vector<char> respData = Response::wrapRespData(ReqCode::SCREEN_SHOT_DATA, data);
-                    int ret = write(clientSd, respData.data(), respData.size());
-                    if (ret == -1) {
-                        loggerInstance()->sysError(errno, "write failed");
-                        throw runtime_error("call to write failed");
-                    }
-                    loggerInstance()->debug({"screen shot data send to client"});
+                    writen(clientSd, respData.data(), respData.size());
+                    loggerInstance()->info({"ScreenShot ------------> Helper"});
                 }
             }
+        } catch (const std::exception &e) {
+            loggerInstance()->error({"writer throw an exception:", e.what()});
         }
     }
 }
@@ -72,29 +60,34 @@ void EventHandler::handleAcceptEv(int listenSd, PtrPoller poller) {
     } else {
         poller->epollAdd(tmpRet.second, EPOLLIN | EPOLLRDHUP | EPOLLHUP);
         clientSockets.insert(tmpRet.second);
-        loggerInstance()->debug("new connection add to poller");
+        loggerInstance()->info({"connection from", parseAddr(tmpRet.first), "established"});
     }
 }
 
 void EventHandler::handleReadEv(int sd, PtrPoller poller) {
     loggerInstance()->debug("handling read event");
     Request request = readRequest(sd);
-    // loggerInstance()->debug({"request got, body:", vecChar2Str(request.getData())});
-    // do job according to request.Code
+    // loggerInstance()->debug({"request got, body:", vecChar2Str(requ>    // do job according to
+    // request.Code
     switch (request.getReqCode()) {
         case ReqCode::REG_HELPER:
-            helperSockets.push_back(sd);
+            helperSockets.insert(sd);
+            loggerInstance()->info("REG ------------ Helper");
             break;
         case ReqCode::REG_WORKER:
-            workerSockets.push_back(sd);
+            workerSockets.insert(sd);
+            loggerInstance()->info("REG ------------ Worker");
             break;
         case ReqCode::CODE_DATA:
             // put into msg
             putCode(request.getData());
+            loggerInstance()->info("CodeData <------------");
             break;
         case ReqCode::SCREEN_SHOT_DATA:
             // put into msg
             putScrShot(request.getData());
+            loggerInstance()->info("ScreenShot <------------");
+            loggerInstance()->debug("screen shot data put into queue");
             break;
         default:
             break;
@@ -102,14 +95,16 @@ void EventHandler::handleReadEv(int sd, PtrPoller poller) {
 }
 
 int EventHandler::handleErrEv(int sd, int listenSd, PtrPoller pollerPtr) {
-    loggerInstance()->error({"EPOLLERR on socket:", to_string(sd)});
     if (sd == listenSd) {
         close(listenSd);
-        loggerInstance()->info("epoll error on listensd, closed and exit");
+        loggerInstance()->error("EPOLLERR on listensd, closed and exit");
         throw runtime_error("unexpected EPOLLERR on listensd");
     } else {
+        loggerInstance()->error({"EPOLLERR on socket:", to_string(sd)});
         pollerPtr->epollDelete(sd);
         clientSockets.erase(sd);
+        workerSockets.erase(sd);
+        helperSockets.erase(sd);
         close(sd);
     }
     return 0;
@@ -118,16 +113,19 @@ int EventHandler::handleErrEv(int sd, int listenSd, PtrPoller pollerPtr) {
 void EventHandler::handleHupEv(int sd, PtrPoller pollerPtr) {
     pollerPtr->epollDelete(sd);
     clientSockets.erase(sd);
-    loggerInstance()->info("EPOLLRDHUP got, client closed");
+    close(sd);
+    loggerInstance()->info("EPOLLRDHUP, Client closed");
 }
 
 void EventHandler::putCode(const vector<char> &data) {
-    std::lock_guard<mutex> guard(codeQMutex);
+    std::lock_guard<mutex> guard(codeScrQMutex);
     codeQueue.push(data);
+    codeScrQCondVar.notify_one();
 }
 void EventHandler::putScrShot(const vector<char> &data) {
-    std::lock_guard<mutex> guard(scrShotQeMutex);
+    std::lock_guard<mutex> guard(codeScrQMutex);
     screenShotQueue.push(data);
+    codeScrQCondVar.notify_one();
 }
 Request readRequest(int sd) {
     char headerBytes[REQ_HEADER_LEN + 1] = {};
@@ -138,13 +136,8 @@ Request readRequest(int sd) {
     }
     const int bodyLen = Request::parseBodyLen(headerBytes);
     vector<char> body(bodyLen);
-    if (bodyLen > 0) {
-        ret = read(sd, body.data(), bodyLen);
-        if (ret == -1) {
-            loggerInstance()->sysError(errno, "call to read failed");
-            throw runtime_error("call to read failed");
-        }
-    }
+    if (bodyLen > 0)
+        ret = readn(sd, body.data(), bodyLen);
     return Request::buildFromBytes(headerBytes, body);
 }
 
