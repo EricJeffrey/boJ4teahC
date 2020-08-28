@@ -74,7 +74,8 @@ def readerJob(sock: socket):
                 listbox.insert(1, strLogWithTime("收到了的别人的代码，放到剪贴板了"))
             elif reqCode == CODE_SCRSHOT_DATA:
                 ret = onScrShotGot(body)
-                listbox.insert(1, strLogWithTime("收到了别人发的截图，保存为%d.png了" % (ret)))
+                listbox.insert(1, strLogWithTime(
+                    "收到了别人发的截图，保存为%d.png了" % (ret)))
             else:
                 pass
         except Exception as e:
@@ -115,7 +116,7 @@ def addDataToQueu():
     writerCodeQLock.release()
 
 
-def startGUI():
+def startGUI(onUICreated):
     global codeTextArea, listbox
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
     # 获取屏幕的缩放因子
@@ -146,6 +147,7 @@ def startGUI():
                   3 - 50, height=maxH * 7 / 8)
     listbox.insert(0, "这里会显示所有消息")
 
+    onUICreated()
     window.mainloop()
     pass
 
@@ -168,9 +170,10 @@ def work():
     try:
         global stop
         sock = connect()
-        Thread(target=readerJob, args=(sock,)).start()
-        Thread(target=writerJob, args=(sock,)).start()
-        startGUI()
+        t1 = Thread(target=readerJob, args=(sock,))
+        t2 = Thread(target=writerJob, args=(sock,))
+        def startAllThread(): t1.start(); t2.start()
+        startGUI(onUICreated=startAllThread)
         stop = True
         sock.close()
     except Exception as e:

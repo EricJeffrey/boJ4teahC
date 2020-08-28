@@ -43,13 +43,33 @@ int work() {
     return 0;
 }
 
-int main(int argc, char const *argv[]) {
-    if (daemon(1, 1) == 1) {
-        perror("daemon failed:");
-        return -1;
+void config() {
+    using std::cerr;
+    bool runAsDaemon = true;
+    bool out2stderr = true;
+    bool debugOn = false;
+    const string logOutPath = "/data/boJ4teahC/log.txt";
+
+    cerr << "config:" << endl;
+    cerr << "\tdaemon: " << (runAsDaemon ? "true" : "false") << endl;
+    cerr << "\tlogout: " << ((!runAsDaemon) && out2stderr ? "stderr" : logOutPath) << endl;
+    cerr << "\tdebug: " << (debugOn ? "true" : "false") << endl;
+
+    if (runAsDaemon) {
+        if (daemon(1, 1) == -1) {
+            perror("daemon failed:");
+            exit(-1);
+        }
     }
-    Logger::init("/data/boJ4teahC/log.txt");
-    loggerInstance()->setDebug(false);
+    if (!runAsDaemon && out2stderr)
+        Logger::init(std::cerr);
+    else
+        Logger::init(logOutPath);
+    loggerInstance()->setDebug(debugOn);
+}
+
+int main(int argc, char const *argv[]) {
+    config();
     work();
     return 0;
 }

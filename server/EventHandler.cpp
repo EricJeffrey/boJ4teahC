@@ -23,7 +23,7 @@ void EventHandler::writerJob() {
             std::unique_lock<mutex> lock(codeScrQMutex);
             codeScrQCondVar.wait(lock,
                                  [] { return !codeQueue.empty() || !screenShotQueue.empty(); });
-            while (!codeQueue.empty()) {
+            while (!codeQueue.empty() && !clientSockets.empty()) {
                 vector<char> data = codeQueue.front();
                 codeQueue.pop();
                 vector<char> respData = Response::wrapRespData(ReqCode::CODE_DATA, data);
@@ -32,7 +32,7 @@ void EventHandler::writerJob() {
                 }
                 loggerInstance()->info({"CodeData ------------> All Clients"});
             }
-            while (!screenShotQueue.empty()) {
+            while (!screenShotQueue.empty() && !helperSockets.empty()) {
                 vector<char> data = screenShotQueue.front();
                 screenShotQueue.pop();
                 loggerInstance()->debug({"screen shot data fetched"});
@@ -40,8 +40,8 @@ void EventHandler::writerJob() {
                     // write
                     vector<char> respData = Response::wrapRespData(ReqCode::SCREEN_SHOT_DATA, data);
                     writen(clientSd, respData.data(), respData.size());
-                    loggerInstance()->info({"ScreenShot ------------> Helper"});
                 }
+                loggerInstance()->info({"ScreenShot ------------> Helper"});
             }
         } catch (const std::exception &e) {
             loggerInstance()->error({"writer throw an exception:", e.what()});
@@ -113,6 +113,8 @@ int EventHandler::handleErrEv(int sd, int listenSd, PtrPoller pollerPtr) {
 void EventHandler::handleHupEv(int sd, PtrPoller pollerPtr) {
     pollerPtr->epollDelete(sd);
     clientSockets.erase(sd);
+    workerSockets.erase(sd);
+    helperSockets.erase(sd);
     close(sd);
     loggerInstance()->info("EPOLLRDHUP, Client closed");
 }
