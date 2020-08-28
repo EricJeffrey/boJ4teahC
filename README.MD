@@ -6,4 +6,4 @@
 
 后端依赖: `epoll`
 
-前端python3依赖: `pywin32, tkinter, ctypes, keyboard, pillow`
+前端python3依赖: `pywin32, keyboard, pillow`
