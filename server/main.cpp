@@ -44,11 +44,11 @@ int work() {
 }
 
 int main(int argc, char const *argv[]) {
-    // if (daemon(1, 0) == 1) {
-    //     perror("daemon failed:");
-    //     return -1;
-    // }
-    Logger::init(std::cerr);
+    if (daemon(1, 1) == 1) {
+        perror("daemon failed:");
+        return -1;
+    }
+    Logger::init("/data/boJ4teahC/log.txt");
     loggerInstance()->setDebug(false);
     work();
     return 0;
