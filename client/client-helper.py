@@ -71,11 +71,11 @@ def readerJob(sock: socket):
             if reqCode == CODE_CODE_DATA:
                 bodyStr = str(body, encoding="utf-8")
                 copy2clipboard(bodyStr)
-                listbox.insert(1, strLogWithTime("收到了的别人的代码，放到剪贴板了"))
+                listbox.insert(1, strLogWithTime("收到了别人的代码，放到剪贴板了"))
             elif reqCode == CODE_SCRSHOT_DATA:
                 ret = onScrShotGot(body)
                 listbox.insert(1, strLogWithTime(
-                    "收到了别人发的截图，保存为%d.png了" % (ret)))
+                    "收到了别人的截图，保存为%d.png了" % (ret)))
             else:
                 pass
         except Exception as e:

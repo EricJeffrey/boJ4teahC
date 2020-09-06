@@ -8,6 +8,8 @@ from PIL import ImageGrab
 import win32clipboard
 from keyboard import add_hotkey
 
+imgIndex = 1
+
 host = "192.168.31.14"
 port = 8000
 byteorder = "big"
@@ -47,6 +49,13 @@ def getScreenShot():
     im = ImageGrab.grab()
     imgByteArray = BytesIO()
     im.save(imgByteArray, "PNG")
+    try:
+        global imgIndex
+        with open("./%d.png" % (imgIndex), mode="wb") as fp:
+            fp.write(imgByteArray.getvalue())
+        imgIndex += 1
+    except Exception as e:
+        print("save image failed: ", e)
     return imgByteArray.getvalue()  # bytes
 
 
@@ -62,7 +71,7 @@ def getFromClipboard():
 
 
 def onHotkeyPress(key):
-    print("onHotKeyPress, key: %s" % (key))
+    # print("onHotKeyPress, key: %s" % (key))
     if key == HOT_KEY_GET_CLIP_DATA:
         codeData = getFromClipboard().encode(encoding="utf-8")
         if len(codeData) == 0:
@@ -72,14 +81,14 @@ def onHotkeyPress(key):
             codeQueue.put(codeData)
             queueCond.notify()
             queueMutex.release()
-            print("clipboard text put to queue")
+            logout("剪贴板内容已发送")
     elif key == HOT_KEY_GET_SCR_SHOT:
         scrShotData = getScreenShot()
         queueMutex.acquire()
         scrShotQueue.put(scrShotData)
         queueCond.notify()
         queueMutex.release()
-        print("screenshot put to queue")
+        logout("屏幕截图已发送")
     pass
 
 
@@ -154,6 +163,7 @@ def work():
         add_hotkey(hotkey=HOT_KEY_GET_CLIP_DATA,
                    callback=onHotkeyPress, args=(HOT_KEY_GET_CLIP_DATA, ))
         Thread(target=writerJob4Worker, args=(sock, )).start()
+        print("已连接到服务器\nCtrl+Alt+F2 -- 获取截图并发送\nCtrl+Alt+F3 -- 发送剪贴板内容\nCtrl+Pause -- 退出")
         readerJob4Worker(sock)
     except Exception as e:
         print("Error: %s" % (e))
