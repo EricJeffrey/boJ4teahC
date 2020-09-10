@@ -55,7 +55,7 @@ def getScreenShot():
             fp.write(imgByteArray.getvalue())
         imgIndex += 1
     except Exception as e:
-        print("save image failed: ", e)
+        print("截图保存失败: ", e)
     return imgByteArray.getvalue()  # bytes
 
 
@@ -66,7 +66,7 @@ def getFromClipboard():
         txt = win32clipboard.GetClipboardData()
         win32clipboard.CloseClipboard()
     except Exception as e:
-        print("get clipboard data error: %s" % (e))
+        print("获取剪贴板数据出错: %s" % (e))
     return txt
 
 
@@ -75,7 +75,7 @@ def onHotkeyPress(key):
     if key == HOT_KEY_GET_CLIP_DATA:
         codeData = getFromClipboard().encode(encoding="utf-8")
         if len(codeData) == 0:
-            print("clipboard has no data")
+            print("剪贴板无数据")
         else:
             queueMutex.acquire()
             codeQueue.put(codeData)
@@ -114,17 +114,19 @@ def readerJob4Worker(sock: socket):
             if reqCode == 0:
                 print("响应码为0，连接已断开")
                 return
-            print("header got, code: %d, len: %d" % (reqCode, bodyLen))
+            print("收到数据, 数据代号: %d, 长度: %d" % (reqCode, bodyLen))
             # addi = int.from_bytes(headers[8:12], byteorder=byteorder)
-            body = sock.recv(bodyLen)
+            body = bytes()
+            while len(body) < bodyLen:
+                body += sock.recv(bodyLen - len(body))
             if reqCode == CODE_CODE_DATA:
                 bodyStr = str(body, encoding="utf-8")
                 copy2clipboard(bodyStr)
                 logout("收到了别人的代码，添加到剪贴板了")
-            else:
-                pass
+        except UnicodeEncodeError as e:
+            print("编码错误 %s" % (e))
         except Exception as e:
-            print("connection closed, reader thread exit: %s" % (e))
+            print("连接已断开 %s" % (e))
             return -1
     pass
 
@@ -142,7 +144,7 @@ def writerJob4Worker(sock: socket):
             sendData(sock, CODE_CODE_DATA, len(codeData), codeData)
         while not scrShotQueue.empty():
             scrShotData = scrShotQueue.get()
-            print("screen shot size: %d" % (len(scrShotData)))
+            print("截图大小: %dKB" % (len(scrShotData) / 1024))
             sendData(sock, CODE_SCRSHOT_DATA, len(scrShotData), scrShotData)
         queueMutex.release()
 

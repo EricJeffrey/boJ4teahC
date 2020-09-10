@@ -59,7 +59,7 @@ def readerJob(sock: socket):
             headers = sock.recv(12)
             reqCode = int.from_bytes(headers[0:4], byteorder="little")
             bodyLen = int.from_bytes(headers[4:8], byteorder="little")
-            print("header got, code: %d, len: %d" % (reqCode, bodyLen))
+            print("收到数据, 数据代号: %d, 长度: %d" % (reqCode, bodyLen))
             # addi = int.from_bytes(headers[8:12], byteorder=byteorder)
             if reqCode == 0:
                 print("invalid reqCode 0, close & exit")
@@ -78,6 +78,8 @@ def readerJob(sock: socket):
                     "收到了别人的截图，保存为%d.png了" % (ret)))
             else:
                 pass
+        except UnicodeEncodeError as e:
+            print("编码错误(不要从微信电脑版复制代码) %s" % (e))
         except Exception as e:
             print("connection closed, reader thread exit: %s" % (e))
             return -1
@@ -172,7 +174,11 @@ def work():
         sock = connect()
         t1 = Thread(target=readerJob, args=(sock,))
         t2 = Thread(target=writerJob, args=(sock,))
-        def startAllThread(): t1.start(); t2.start()
+
+        def startAllThread():
+            t1.start()
+            t2.start()
+
         startGUI(onUICreated=startAllThread)
         stop = True
         sock.close()
