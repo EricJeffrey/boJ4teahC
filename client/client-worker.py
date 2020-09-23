@@ -165,7 +165,7 @@ def work():
         add_hotkey(hotkey=HOT_KEY_GET_CLIP_DATA,
                    callback=onHotkeyPress, args=(HOT_KEY_GET_CLIP_DATA, ))
         Thread(target=writerJob4Worker, args=(sock, )).start()
-        print("已连接到服务器\nCtrl+Alt+F2 -- 获取截图并发送\nCtrl+Alt+F3 -- 发送剪贴板内容\nCtrl+Pause -- 退出")
+        print("已连接到服务器\n%s -- 获取截图并发送\n%s -- 发送剪贴板内容\nCtrl+Pause -- 退出" % (HOT_KEY_GET_SCR_SHOT, HOT_KEY_GET_CLIP_DATA))
         readerJob4Worker(sock)
     except Exception as e:
         print("Error: %s" % (e))
