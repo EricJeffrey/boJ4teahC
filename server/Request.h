@@ -3,10 +3,10 @@
 
 #include "Logger.h"
 #include <arpa/inet.h>
-#include <errno.h>
-#include <stdexcept>
 #include <cstring>
+#include <errno.h>
 #include <exception>
+#include <stdexcept>
 #include <unistd.h>
 #include <vector>
 
@@ -14,7 +14,7 @@ using std::runtime_error;
 using std::vector;
 
 enum ReqCode {
-    HEART_BEAT = 100,
+    // HEART_BEAT = 100,
     CODE_DATA = 202,
     SCREEN_SHOT_DATA = 201,
     REG_WORKER = 101,
@@ -44,9 +44,18 @@ public:
     vector<char> &getData() { return data; }
     int getReqCode() { return requestCode; }
 
+    static int parseReqCode(char *rawHeaders) {
+        return ntohl(*reinterpret_cast<int *>(rawHeaders));
+    }
+
     static int parseBodyLen(char *rawHeaders) {
         const int bodyLen = *(reinterpret_cast<int *>(rawHeaders + 4));
         return ntohl(bodyLen);
+    }
+
+    static bool isReqCodeValid(int reqCode) {
+        return CODE_DATA == reqCode || SCREEN_SHOT_DATA == reqCode || REG_WORKER == reqCode ||
+               REG_HELPER == reqCode;
     }
 };
 

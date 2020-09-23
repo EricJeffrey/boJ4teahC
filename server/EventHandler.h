@@ -2,11 +2,11 @@
 #define EVENT_HANDLER_H
 
 #include "Logger.h"
-#include "Utils.h"
-#include "Request.h"
 #include "Poller.h"
-#include <queue>
+#include "Request.h"
+#include "Utils.h"
 #include <condition_variable>
+#include <queue>
 
 using std::condition_variable;
 using std::queue;
@@ -27,6 +27,8 @@ public:
     static void handleReadEv(int sd, PtrPoller poller);
     static int handleErrEv(int sd, int listenSd, PtrPoller pollerPtr);
     static void handleHupEv(int sd, PtrPoller pollerPtr);
+    // remove from poller, socket sets then close it
+    static void removeSock(int sd, PtrPoller pollerPtr);
 
     static void writerJob();
 

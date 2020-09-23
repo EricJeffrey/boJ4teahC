@@ -1,9 +1,9 @@
 #if !defined(EVENT_HANDLER_CPP)
 #define EVENT_HANDLER_CPP
 
-#include <chrono>
-#include "Response.h"
 #include "EventHandler.h"
+#include "Response.h"
+#include <chrono>
 
 set<int> EventHandler::workerSockets;
 set<int> EventHandler::helperSockets;
@@ -64,33 +64,37 @@ void EventHandler::handleAcceptEv(int listenSd, PtrPoller poller) {
     }
 }
 
-void EventHandler::handleReadEv(int sd, PtrPoller poller) {
+void EventHandler::handleReadEv(int sd, PtrPoller pollerPtr) {
     loggerInstance()->debug("handling read event");
-    Request request = readRequest(sd);
-    // loggerInstance()->debug({"request got, body:", vecChar2Str(requ>    // do job according to
-    // request.Code
-    switch (request.getReqCode()) {
-        case ReqCode::REG_HELPER:
-            helperSockets.insert(sd);
-            loggerInstance()->info("REG ------------ Helper");
-            break;
-        case ReqCode::REG_WORKER:
-            workerSockets.insert(sd);
-            loggerInstance()->info("REG ------------ Worker");
-            break;
-        case ReqCode::CODE_DATA:
-            // put into msg
-            putCode(request.getData());
-            loggerInstance()->info("CodeData <------------");
-            break;
-        case ReqCode::SCREEN_SHOT_DATA:
-            // put into msg
-            putScrShot(request.getData());
-            loggerInstance()->info("ScreenShot <------------");
-            loggerInstance()->debug("screen shot data put into queue");
-            break;
-        default:
-            break;
+    try {
+        Request request = readRequest(sd);
+        // do job according to request.Code
+        switch (request.getReqCode()) {
+            case ReqCode::REG_HELPER:
+                helperSockets.insert(sd);
+                loggerInstance()->info("REG ------------ Helper");
+                break;
+            case ReqCode::REG_WORKER:
+                workerSockets.insert(sd);
+                loggerInstance()->info("REG ------------ Worker");
+                break;
+            case ReqCode::CODE_DATA:
+                // put into msg
+                putCode(request.getData());
+                loggerInstance()->info("CodeData <------------");
+                break;
+            case ReqCode::SCREEN_SHOT_DATA:
+                // put into msg
+                putScrShot(request.getData());
+                loggerInstance()->info("ScreenShot <------------");
+                loggerInstance()->debug("screen shot data put into queue");
+                break;
+            default:
+                break;
+        }
+    } catch (const std::exception &e) {
+        loggerInstance()->error(string("read client request failed: ") + e.what());
+        removeSock(sd, pollerPtr);
     }
 }
 
@@ -101,21 +105,21 @@ int EventHandler::handleErrEv(int sd, int listenSd, PtrPoller pollerPtr) {
         throw runtime_error("unexpected EPOLLERR on listensd");
     } else {
         loggerInstance()->error({"EPOLLERR on socket:", to_string(sd)});
-        pollerPtr->epollDelete(sd);
-        clientSockets.erase(sd);
-        workerSockets.erase(sd);
-        helperSockets.erase(sd);
-        close(sd);
+        removeSock(sd, pollerPtr);
     }
     return 0;
 }
 
-void EventHandler::handleHupEv(int sd, PtrPoller pollerPtr) {
+void EventHandler::removeSock(int sd, PtrPoller pollerPtr) {
     pollerPtr->epollDelete(sd);
     clientSockets.erase(sd);
     workerSockets.erase(sd);
     helperSockets.erase(sd);
     close(sd);
+}
+
+void EventHandler::handleHupEv(int sd, PtrPoller pollerPtr) {
+    removeSock(sd, pollerPtr);
     loggerInstance()->info("EPOLLRDHUP, Client closed");
 }
 
@@ -135,6 +139,10 @@ Request readRequest(int sd) {
     if (ret == -1) {
         loggerInstance()->sysError(errno, "call to read failed");
         throw runtime_error("call to read failed");
+    }
+    if (!Request::isReqCodeValid(Request::parseReqCode(headerBytes))) {
+        loggerInstance()->error("Invalid request code");
+        throw runtime_error("invalid request code");
     }
     const int bodyLen = Request::parseBodyLen(headerBytes);
     vector<char> body(bodyLen);

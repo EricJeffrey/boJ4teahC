@@ -2,17 +2,16 @@
 #define LOGGER_H
 
 #include <cstring>
-#include <thread>
-#include <mutex>
-#include <iostream>
+#include <ctime>
+#include <exception>
 #include <fstream>
-#include <ostream>
-#include <string>
+#include <iostream>
 #include <memory>
 #include <mutex>
-#include <ctime>
+#include <ostream>
 #include <stdexcept>
-#include <exception>
+#include <string>
+#include <thread>
 
 using std::endl;
 using std::initializer_list;
@@ -48,6 +47,7 @@ private:
         for (auto &&s : sli)
             (*out) << s << " ";
         (*out) << endl;
+        out->flush();
     }
 
 public:
