@@ -42,6 +42,8 @@ SockAddr2Int acceptConn(int listenSd) {
     using std::make_pair;
     sockaddr_in addr;
     socklen_t addrLen;
+    memset(&addrLen, 0, sizeof(addrLen));
+    memset(&addr, 0, sizeof(addr));
     int ret = accept(listenSd, (sockaddr *)&addr, &addrLen);
     if (ret == -1) {
         const int tmpErrno = errno;

@@ -45,7 +45,7 @@ int work() {
 
 void config() {
     using std::cerr;
-    bool runAsDaemon = true;
+    bool runAsDaemon = false;
     bool out2stderr = true;
     bool debugOn = false;
     const string logOutPath = "/data/boJ4teahC/log.txt";
