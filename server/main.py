@@ -1,11 +1,35 @@
 #!/usr/bin/python3
 import asyncio
 from datetime import datetime
+import json
 
 CODE_WORKER_REG = 101
 CODE_HELPER_REG = 102
 CODE_DATA_SCR_SHOT = 201
 CODE_DATA_CODE = 202
+
+
+def dothex2num(x):
+    return sum([int(v) * (256 ** (3 - i)) for i, v in enumerate(x.split('.'))])
+
+
+# 只允许教育网的IP访问
+# [ ["59.192.0.0", "59.255.255.255", 4194304], ... ]
+allowed_ip = []
+with open("./allowed_ip.json") as fp:
+    allowed_ip = json.load(fp)
+    allowed_ip = [ips.split('/') for ips in allowed_ip]
+    allowed_ip = [[dothex2num(ips[0]), 32 - int(ips[1])] for ips in allowed_ip]
+    allowed_ip = [[ips[0], ips[0] + 2 ** ips[1] - 1] for ips in allowed_ip]
+
+
+def is_ip_allowed(ip):
+    ipn = dothex2num(ip)
+    for v in allowed_ip:
+        if ipn >= v[0] and ipn <= v[1]:
+            return True
+    return False
+
 
 port = 8999
 
@@ -136,13 +160,17 @@ async def handle_worker(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 
 
 async def client_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    reqCode, _ = await read_one_packet(reader)
-    if reqCode == CODE_HELPER_REG:
-        await handle_helper(reader, writer)
-    elif reqCode == CODE_WORKER_REG:
-        await handle_worker(reader, writer)
+    peerIP = writer.get_extra_info('peername')[0]
+    if is_ip_allowed(peerIP):
+        reqCode, _ = await read_one_packet(reader)
+        if reqCode == CODE_HELPER_REG:
+            await handle_helper(reader, writer)
+        elif reqCode == CODE_WORKER_REG:
+            await handle_worker(reader, writer)
+        else:
+            print_invalid()
     else:
-        print_invalid()
+        print_flush("IP not allowed: {}".format(peerIP))
 
 
 async def main():
@@ -151,6 +179,5 @@ async def main():
     print_flush(f'cheater started on {addrs}')
     async with server:
         await server.serve_forever()
-
 
 asyncio.run(main())
