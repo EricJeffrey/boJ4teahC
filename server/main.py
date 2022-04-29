@@ -47,8 +47,12 @@ def print_flush(s):
 
 def print_invalid():
     print_flush("INVALID ReqCode")
-    print_flush(
-        "Valid reqCodes are: 101 102 for worker/helper register, 201 for worker screen shot, 202 for helper code data")
+    # print_flush(
+    #     "Valid reqCodes are: 101 102 for worker/helper register, 201 for worker screen shot, 202 for helper code data")
+
+
+def print_debug(s):
+    print("DEBUG {}".format(s), flush=True)
 
 
 def send_one_packet(writer: asyncio.StreamWriter, code, data):
@@ -61,16 +65,20 @@ def send_one_packet(writer: asyncio.StreamWriter, code, data):
 
 
 async def read_one_packet(reader: asyncio.StreamReader):
+    async def read_with_timeout(reader: asyncio.StreamReader, nbytes, timeout=1):
+        return await asyncio.wait_for(reader.read(nbytes), timeout)
+
     def bytes2int(data: bytes):
         return int.from_bytes(data, 'big')
-    reqCode = bytes2int(await reader.read(4))
-    length = bytes2int(await reader.read(4))
-    _ = await reader.read(4)
+    tmp = await read_with_timeout(reader, 4)
+    reqCode = bytes2int(tmp)
+    length = bytes2int(await read_with_timeout(reader, 4))
+    _ = await read_with_timeout(reader, 4)
     data = None
     if length != 0:
         data = b''
         while len(data) < length:
-            tmp = await reader.read(length - len(data))
+            tmp = await read_with_timeout(reader, length)
             data += tmp
     return (reqCode, data)
 
@@ -108,25 +116,28 @@ async def handle_helper(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     print_flush("helper from {} connected".format(
         writer.get_extra_info("peername")))
 
-    def addToHelper(peername):
-        helpers[peername] = (reader, writer)
-
-    def removeFromHelper():
-        helpers.pop(peername)
-        pass
+    def addToHelper(peername): helpers[peername] = (reader, writer)
+    def removeFromHelper(): helpers.pop(peername)
     try:
         peername = ':'.join([str(v)
                              for v in writer.get_extra_info('peername')])
         await acquire_lock_then([helperLock], addToHelper, peername)
         while True:
-            reqCode, data = await read_one_packet(reader)
-            if reqCode == CODE_DATA_CODE:
-                print_flush("received code from helper {}".format(peername))
-                await acquire_lock_then([workerLock, helperLock], sendCode, data)
-            else:
-                print_invalid()
-    except ConnectionError:
+            try:
+                reqCode, data = await read_one_packet(reader)
+                if reqCode == CODE_DATA_CODE:
+                    print_flush(
+                        "received code from helper {}".format(peername))
+                    await acquire_lock_then([workerLock, helperLock], sendCode, data)
+                else:
+                    print_invalid()
+                    return
+            except asyncio.exceptions.TimeoutError:
+                pass
+    except Exception:
         print_flush("connection to helper {} closed".format(peername))
+        if workerLock.locked():
+            workerLock.release()
         await acquire_lock_then([helperLock], removeFromHelper)
 
 
@@ -145,30 +156,42 @@ async def handle_worker(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                              for v in writer.get_extra_info('peername')])
         await acquire_lock_then([workerLock], addToWorker, peername)
         while True:
-            reqCode, data = await read_one_packet(reader)
-            if reqCode == CODE_DATA_SCR_SHOT:
-                print_flush("received screen from worker {}".format(peername))
-                await acquire_lock_then([helperLock], sendScrShot, data)
-            elif reqCode == CODE_DATA_CODE:
-                print_flush("received code from worker {}".format(peername))
-                await acquire_lock_then([workerLock, helperLock], sendCode, data)
-            else:
-                print_invalid()
-    except ConnectionError:
+            try:
+                reqCode, data = await read_one_packet(reader)
+                if reqCode == CODE_DATA_SCR_SHOT:
+                    print_flush(
+                        "received screen from worker {}".format(peername))
+                    await acquire_lock_then([helperLock], sendScrShot, data)
+                elif reqCode == CODE_DATA_CODE:
+                    print_flush(
+                        "received code from worker {}".format(peername))
+                    await acquire_lock_then([workerLock, helperLock], sendCode, data)
+                else:
+                    print_invalid()
+                    return
+            except asyncio.exceptions.TimeoutError:
+                pass
+    except Exception:
         print_flush("connection to worker {} closed".format(peername))
+        if helperLock.locked():
+            helperLock.release()
         await acquire_lock_then([workerLock], removeFromWorker)
 
 
 async def client_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    peerIP = writer.get_extra_info('peername')[0]
+    peer = writer.get_extra_info('peername')
+    peerIP = peer[0]
     if is_ip_allowed(peerIP):
-        reqCode, _ = await read_one_packet(reader)
-        if reqCode == CODE_HELPER_REG:
-            await handle_helper(reader, writer)
-        elif reqCode == CODE_WORKER_REG:
-            await handle_worker(reader, writer)
-        else:
-            print_invalid()
+        try:
+            reqCode, _ = await read_one_packet(reader)
+            if reqCode == CODE_HELPER_REG:
+                await handle_helper(reader, writer)
+            elif reqCode == CODE_WORKER_REG:
+                await handle_worker(reader, writer)
+            else:
+                print_invalid()
+        except asyncio.exceptions.TimeoutError:
+            print_flush("client {} register timeout".format(peerIP))
     else:
         print_flush("IP not allowed: {}".format(peerIP))
 
